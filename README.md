@@ -23,3 +23,64 @@ A secure, full-featured file upload application with JWT authentication, drag-an
 - **CORS**: Enabled for cross-origin requests
 
 ## Project Structure
+
+```
+File-Uploader/
+├── server.js                # Express server with auth and upload endpoints
+├── package.json             # Project dependencies
+├── index.html               # Main upload interface
+├── login.html               # Login page
+├── view.html                # File management/listing page
+├── drag-drop-upload.tsx     # React component for drag-drop functionality
+├── start-app.bat            # Batch file to start the application
+└── uploads/                 # Directory for uploaded files
+```
+
+## Installation
+
+1. Clone or download the project
+2. Navigate to the project directory
+3. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+## Configuration
+
+### Default Credentials
+
+The application comes with two demo users:
+
+| Username | Password  | Role  |
+|----------|-----------|-------|
+| admin    | admin123  | Admin |
+| user     | user123   | User  |
+
+> **Note:** In production, store credentials in a database and use environment variables for secrets.
+
+### Environment Variables
+
+To use in production, set the `JWT_SECRET` environment variable instead of hardcoding it in server.js:
+
+```js
+const JWT_SECRET = process.env.JWT_SECRET || 'my-key-12345';
+```
+
+## Getting Started
+
+### Start the Server
+
+**Option 1: Using npm**
+```bash
+npm start
+```
+
+**Option 2: Using batch file (Windows)**
+```
+start-app.bat
+```
+
+**Option 3: Using Node directly**
+```bash
+node server.js
+```
