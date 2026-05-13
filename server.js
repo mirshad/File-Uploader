@@ -84,7 +84,7 @@ function getLocalIp() {
   return localIp;
 }
 
-const localIp = getLocalIp();
+//const localIp = getLocalIp();
 
 // Login endpoint
 app.post('/login', (req, res) => {
@@ -241,7 +241,7 @@ app.get('/view.html', (req, res) => {
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${PORT}`);
-  console.log(`Local network access: http://${localIp}:${PORT}`);
+ // console.log(`Local network access: http://${localIp}:${PORT}`);
   console.log(`Open http://localhost:${PORT} in your browser to use the app`);
   console.log(`Upload endpoint: http://localhost:${PORT}/upload`);
   console.log(`Files will be saved to: ${path.resolve(uploadDir)}`);
