@@ -117,7 +117,7 @@ app.post('/login', (req, res) => {
 });
 
 // Create uploads directory if it doesn't exist
-const uploadDir = './uploads';
+const uploadDir = '/tmp/uploads';
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
 }
