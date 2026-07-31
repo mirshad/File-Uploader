@@ -117,9 +117,9 @@ app.post('/login', (req, res) => {
 });
 
 // Create uploads directory if it doesn't exist
-const uploadDir = '/tmp/uploads';
+const uploadDir = process.env.UPLOAD_DIR || '/tmp/uploads';
 if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
+  fs.mkdirSync(uploadDir, { recursive: true });
 }
 
 // Configure multer for file storage
@@ -239,10 +239,14 @@ app.get('/view.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'view.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
- // console.log(`Local network access: http://${localIp}:${PORT}`);
-  console.log(`Open http://localhost:${PORT} in your browser to use the app`);
-  console.log(`Upload endpoint: http://localhost:${PORT}/upload`);
-  console.log(`Files will be saved to: ${path.resolve(uploadDir)}`);
-});
+if (require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+   // console.log(`Local network access: http://${localIp}:${PORT}`);
+    console.log(`Open http://localhost:${PORT} in your browser to use the app`);
+    console.log(`Upload endpoint: http://localhost:${PORT}/upload`);
+    console.log(`Files will be saved to: ${path.resolve(uploadDir)}`);
+  });
+}
+
+module.exports = { app, authenticateToken, requireAdmin, getLocalIp, uploadDir, JWT_SECRET, users };
