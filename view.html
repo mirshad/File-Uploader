@@ -628,8 +628,16 @@
                 window.location.href = '/login.html';
                 return false;
             }
-            
-            currentUser = JSON.parse(userStr);
+
+            try {
+                currentUser = JSON.parse(userStr);
+            } catch (error) {
+                // Corrupted session data: clear it instead of leaving a broken page.
+                console.error('Stored user data is not valid JSON, logging out:', error);
+                logout();
+                return false;
+            }
+
             document.getElementById('username').textContent = currentUser.username;
             document.getElementById('userRole').textContent = currentUser.role;
             return true;
@@ -642,9 +650,18 @@
             window.location.href = '/login.html';
         }
 
-        // Check auth on page load
-        if (!checkAuth()) {
-            // Will redirect in checkAuth
+        const isAuthenticated = checkAuth();
+
+        // Read an error message from a failed response without letting a non-JSON
+        // body (proxy page, empty response) hide the real failure.
+        async function readErrorMessage(response, fallback) {
+            try {
+                const data = await response.json();
+                if (data && data.error) return data.error;
+            } catch (error) {
+                console.error('Failed to parse error response as JSON:', error);
+            }
+            return `${fallback} (HTTP ${response.status})`;
         }
 
         async function loadFiles() {
@@ -661,7 +678,14 @@
                     return;
                 }
 
+                if (!response.ok) {
+                    throw new Error(await readErrorMessage(response, 'Failed to load files'));
+                }
+
                 const data = await response.json();
+                if (!Array.isArray(data.files)) {
+                    throw new Error('Unexpected response from server: no file list returned.');
+                }
                 files = data.files;
                 
                 document.getElementById('loadingState').style.display = 'none';
@@ -675,7 +699,10 @@
                 }
             } catch (error) {
                 console.error('Error loading files:', error);
-                document.getElementById('loadingState').innerHTML = '<p style="color: #c92a2a;">Error loading files. Make sure the server is running.</p>';
+                const loadingState = document.getElementById('loadingState');
+                loadingState.style.display = 'block';
+                loadingState.innerHTML = '<p style="color: #c92a2a;"></p>';
+                loadingState.querySelector('p').textContent = `Error loading files: ${error.message}`;
             }
         }
 
@@ -809,6 +836,9 @@
                 } else if (['txt', 'js', 'json', 'html', 'css', 'xml', 'md', 'csv', 'log', 'py', 'java', 'c', 'cpp', 'sh', 'ps1'].includes(ext)) {
                     // Preview text files
                     const response = await fetch(fileUrl);
+                    if (!response.ok) {
+                        throw new Error(await readErrorMessage(response, 'Failed to load file'));
+                    }
                     const text = await response.text();
                     modalBody.innerHTML = `<pre class="preview-text">${escapeHtml(text)}</pre>`;
                 } else {
@@ -837,9 +867,11 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                         <h3>Error loading preview</h3>
-                        <p>Failed to load file preview.</p>
+                        <p class="preview-error-message"></p>
                     </div>
                 `;
+                modalBody.querySelector('.preview-error-message').textContent =
+                    `Failed to load file preview: ${error.message}`;
             }
         }
 
@@ -887,27 +919,29 @@
                     return;
                 }
 
-                if (response.ok) {
-                    files = files.filter(f => f.filename !== filename);
-                    
-                    if (files.length === 0) {
-                        document.getElementById('fileTable').style.display = 'none';
-                        document.getElementById('emptyState').style.display = 'block';
-                    } else {
-                        displayFiles();
-                        updateStats();
-                    }
+                if (!response.ok) {
+                    throw new Error(await readErrorMessage(response, 'Failed to delete file'));
+                }
+
+                files = files.filter(f => f.filename !== filename);
+
+                if (files.length === 0) {
+                    document.getElementById('fileTable').style.display = 'none';
+                    document.getElementById('emptyState').style.display = 'block';
                 } else {
-                    alert('Failed to delete file');
+                    displayFiles();
+                    updateStats();
                 }
             } catch (error) {
                 console.error('Error deleting file:', error);
-                alert('Error deleting file');
+                alert(`Error deleting "${filename}": ${error.message}`);
             }
         }
 
-        // Load files when page loads
-        loadFiles();
+        // Load files when page loads (skipped while redirecting to the login page)
+        if (isAuthenticated) {
+            loadFiles();
+        }
     </script>
 </body>
 </html>
