@@ -32,6 +32,10 @@ File-Uploader/
 ├── login.html               # Login page
 ├── view.html                # File management/listing page
 ├── drag-drop-upload.tsx     # React component for drag-drop functionality
+├── assets/
+│   ├── shared.css           # Styles shared by all pages
+│   ├── auth.js              # Shared auth helpers (checkAuth, logout, authFetch)
+│   └── format.js            # Shared formatting helpers (file size, date, file type)
 ├── start-app.bat            # Batch file to start the application
 └── uploads/                 # Directory for uploaded files
 ```

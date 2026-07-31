@@ -4,36 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>File Manager - View Files</title>
+    <link rel="stylesheet" href="/assets/shared.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
         .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            padding: 40px;
             max-width: 1200px;
             margin: 0 auto;
         }
 
         .header {
-            display: flex;
-            justify-content: space-between;
             align-items: center;
             margin-bottom: 30px;
             flex-wrap: wrap;
-            gap: 16px;
         }
 
         .header-left {
@@ -48,94 +29,10 @@
             gap: 12px;
         }
 
-        .user-badge {
-            padding: 8px 16px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            font-size: 14px;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .user-icon {
-            width: 20px;
-            height: 20px;
-            stroke: #667eea;
-        }
-
-        .role-badge {
-            padding: 4px 8px;
-            background: #667eea;
-            color: white;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .btn-logout {
-            padding: 10px 20px;
-            background: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-logout:hover {
-            background: #c82333;
-        }
-
-        h1 {
-            color: #333;
-            font-size: 32px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
         .header-icon {
             width: 32px;
             height: 32px;
             stroke: #667eea;
-        }
-
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.2s ease;
-        }
-
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #5568d3;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-icon {
-            width: 16px;
-            height: 16px;
         }
 
         .stats {
@@ -334,10 +231,6 @@
             animation: spin 1s linear infinite;
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
         .modal {
             display: none;
             position: fixed;
@@ -521,7 +414,7 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container card">
         <div class="header">
             <div class="header-left">
                 <h1>
@@ -545,7 +438,7 @@
                     </svg>
                     Upload Files
                 </a>
-                <button class="btn-logout" onclick="logout()">Logout</button>
+                <button class="btn btn-logout" onclick="logout()">Logout</button>
             </div>
         </div>
 
@@ -614,52 +507,19 @@
         </div>
     </div>
 
+    <script src="/assets/format.js"></script>
+    <script src="/assets/auth.js"></script>
     <script>
         let files = [];
-        let token = null;
-        let currentUser = null;
 
-        // Check authentication
-        function checkAuth() {
-            token = localStorage.getItem('token');
-            const userStr = localStorage.getItem('user');
-            
-            if (!token || !userStr) {
-                window.location.href = '/login.html';
-                return false;
-            }
-            
-            currentUser = JSON.parse(userStr);
-            document.getElementById('username').textContent = currentUser.username;
-            document.getElementById('userRole').textContent = currentUser.role;
-            return true;
-        }
-
-        // Logout function
-        function logout() {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            window.location.href = '/login.html';
-        }
-
-        // Check auth on page load
-        if (!checkAuth()) {
-            // Will redirect in checkAuth
-        }
+        // Check auth on page load (redirects when the session is missing)
+        checkAuth();
 
         async function loadFiles() {
             try {
-                const response = await fetch('files', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
+                const response = await authFetch('files');
 
-                if (response.status === 401 || response.status === 403) {
-                    alert('Session expired. Please login again.');
-                    logout();
-                    return;
-                }
+                if (!response) return;
 
                 const data = await response.json();
                 files = data.files;
@@ -741,31 +601,6 @@
             document.getElementById('imageCount').textContent = imageCount;
         }
 
-        function getFileType(filename) {
-            const ext = filename.split('.').pop().toLowerCase();
-            const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'];
-            const videoExts = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'];
-            const docExts = ['pdf', 'doc', 'docx', 'txt', 'xls', 'xlsx', 'ppt', 'pptx'];
-
-            if (imageExts.includes(ext)) return 'image';
-            if (videoExts.includes(ext)) return 'video';
-            if (docExts.includes(ext)) return 'document';
-            return 'other';
-        }
-
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 B';
-            const k = 1024;
-            const sizes = ['B', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-        }
-
-        function formatDate(dateString) {
-            const date = new Date(dateString);
-            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-        }
-
         function downloadFile(filename) {
             window.location.href = `download/${filename}`;
         }
@@ -780,7 +615,7 @@
             modal.classList.add('active');
 
             const fileType = getFileType(filename);
-            const ext = filename.split('.').pop().toLowerCase();
+            const ext = getFileExtension(filename);
             const fileUrl = `uploads/${filename}`;
 
             try {
@@ -848,12 +683,6 @@
             modal.classList.remove('active');
         }
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
         // Close modal when clicking outside
         window.onclick = function(event) {
             const modal = document.getElementById('previewModal');
@@ -875,12 +704,9 @@
             }
 
             try {
-                const response = await fetch(`delete/${filename}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
+                const response = await authFetch(`delete/${filename}`, {
+                    method: 'DELETE'
+                }, { handleAuthError: false });
 
                 if (response.status === 401 || response.status === 403) {
                     alert('You do not have permission to delete files. Only admins can delete files.');
