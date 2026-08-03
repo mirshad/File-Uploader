@@ -70,13 +70,27 @@ export default function FileUploader() {
           ...prev,
           [fileObj.id]: { status: 'success', progress: 100 }
         }));
-      } else {
-        throw new Error('Upload failed');
+        return;
       }
+
+      let serverError = '';
+      try {
+        const data = await response.json();
+        serverError = data?.error ?? '';
+      } catch (parseError) {
+        console.error('Failed to parse upload error response:', parseError);
+      }
+
+      throw new Error(serverError || `Upload failed (HTTP ${response.status})`);
     } catch (error) {
+      console.error(`Upload failed for ${fileObj.name}:`, error);
       setUploadStatus(prev => ({
         ...prev,
-        [fileObj.id]: { status: 'error', progress: 0 }
+        [fileObj.id]: {
+          status: 'error',
+          progress: 0,
+          error: error instanceof Error ? error.message : String(error)
+        }
       }));
     }
   };
@@ -150,6 +164,9 @@ export default function FileUploader() {
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-gray-800 truncate">{fileObj.name}</p>
                           <p className="text-sm text-gray-500">{formatFileSize(fileObj.size)}</p>
+                          {status?.status === 'error' && (
+                            <p className="text-sm text-red-600">{status.error || 'Upload failed'}</p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-3">

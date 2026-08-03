@@ -32,6 +32,10 @@ File-Uploader/
 ├── login.html               # Login page
 ├── view.html                # File management/listing page
 ├── drag-drop-upload.tsx     # React component for drag-drop functionality
+├── assets/
+│   ├── shared.css           # Styles shared by all pages
+│   ├── auth.js              # Shared auth helpers (checkAuth, logout, authFetch)
+│   └── format.js            # Shared formatting helpers (file size, date, file type)
 ├── start-app.bat            # Batch file to start the application
 └── uploads/                 # Directory for uploaded files
 ```
@@ -49,21 +53,27 @@ File-Uploader/
 
 ### Default Credentials
 
-The application comes with two demo users:
+For local development only, the application falls back to two demo users:
 
 | Username | Password  | Role  |
 |----------|-----------|-------|
 | admin    | admin123  | Admin |
 | user     | user123   | User  |
 
-> **Note:** In production, store credentials in a database and use environment variables for secrets.
+> **Note:** These fallbacks are refused when `NODE_ENV=production`; set the environment variables below instead. In production, store credentials in a database.
 
 ### Environment Variables
 
-To use in production, set the `JWT_SECRET` environment variable instead of hardcoding it in server.js:
+| Variable | Description |
+|----------|-------------|
+| `JWT_SECRET` | Signing key for JWTs. Required in production; otherwise a random per-process key is generated (tokens do not survive a restart). |
+| `ADMIN_PASSWORD` / `USER_PASSWORD` | Passwords for the demo users. Required in production. |
+| `ALLOWED_ORIGINS` | Comma-separated origins allowed to call the API cross-origin. Unset means same-origin only. |
+| `UPLOAD_DIR` | Directory for uploaded files (default `/tmp/uploads`). |
+| `PORT` | Port to listen on (default `3000`). |
 
-```js
-const JWT_SECRET = process.env.JWT_SECRET || 'my-key-12345';
+```bash
+NODE_ENV=production JWT_SECRET="$(openssl rand -hex 32)" ADMIN_PASSWORD=... USER_PASSWORD=... npm start
 ```
 
 ## Getting Started

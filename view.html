@@ -4,36 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>File Manager - View Files</title>
+    <link rel="stylesheet" href="/assets/shared.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
         .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            padding: 40px;
             max-width: 1200px;
             margin: 0 auto;
         }
 
         .header {
-            display: flex;
-            justify-content: space-between;
             align-items: center;
             margin-bottom: 30px;
             flex-wrap: wrap;
-            gap: 16px;
         }
 
         .header-left {
@@ -48,94 +29,10 @@
             gap: 12px;
         }
 
-        .user-badge {
-            padding: 8px 16px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            font-size: 14px;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .user-icon {
-            width: 20px;
-            height: 20px;
-            stroke: #667eea;
-        }
-
-        .role-badge {
-            padding: 4px 8px;
-            background: #667eea;
-            color: white;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .btn-logout {
-            padding: 10px 20px;
-            background: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-logout:hover {
-            background: #c82333;
-        }
-
-        h1 {
-            color: #333;
-            font-size: 32px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
         .header-icon {
             width: 32px;
             height: 32px;
             stroke: #667eea;
-        }
-
-        .btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.2s ease;
-        }
-
-        .btn-primary {
-            background: #667eea;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #5568d3;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-icon {
-            width: 16px;
-            height: 16px;
         }
 
         .stats {
@@ -334,10 +231,6 @@
             animation: spin 1s linear infinite;
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
         .modal {
             display: none;
             position: fixed;
@@ -521,7 +414,7 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container card">
         <div class="header">
             <div class="header-left">
                 <h1>
@@ -545,7 +438,7 @@
                     </svg>
                     Upload Files
                 </a>
-                <button class="btn-logout" onclick="logout()">Logout</button>
+                <button class="btn btn-logout" onclick="logout()">Logout</button>
             </div>
         </div>
 
@@ -614,11 +507,13 @@
         </div>
     </div>
 
+    <script src="/assets/format.js"></script>
+    <script src="/assets/auth.js"></script>
     <script>
         let files = [];
-        let token = null;
-        let currentUser = null;
 
+        // Check auth on page load (redirects when the session is missing)
+        checkAuth();
         // Check authentication
         function checkAuth() {
             token = localStorage.getItem('token');
@@ -628,8 +523,16 @@
                 window.location.href = '/login.html';
                 return false;
             }
-            
-            currentUser = JSON.parse(userStr);
+
+            try {
+                currentUser = JSON.parse(userStr);
+            } catch (error) {
+                // Corrupted session data: clear it instead of leaving a broken page.
+                console.error('Stored user data is not valid JSON, logging out:', error);
+                logout();
+                return false;
+            }
+
             document.getElementById('username').textContent = currentUser.username;
             document.getElementById('userRole').textContent = currentUser.role;
             return true;
@@ -642,26 +545,34 @@
             window.location.href = '/login.html';
         }
 
-        // Check auth on page load
-        if (!checkAuth()) {
-            // Will redirect in checkAuth
+        const isAuthenticated = checkAuth();
+
+        // Read an error message from a failed response without letting a non-JSON
+        // body (proxy page, empty response) hide the real failure.
+        async function readErrorMessage(response, fallback) {
+            try {
+                const data = await response.json();
+                if (data && data.error) return data.error;
+            } catch (error) {
+                console.error('Failed to parse error response as JSON:', error);
+            }
+            return `${fallback} (HTTP ${response.status})`;
         }
 
         async function loadFiles() {
             try {
-                const response = await fetch('files', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
+                const response = await authFetch('files');
 
-                if (response.status === 401 || response.status === 403) {
-                    alert('Session expired. Please login again.');
-                    logout();
-                    return;
+                if (!response) return;
+
+                if (!response.ok) {
+                    throw new Error(await readErrorMessage(response, 'Failed to load files'));
                 }
 
                 const data = await response.json();
+                if (!Array.isArray(data.files)) {
+                    throw new Error('Unexpected response from server: no file list returned.');
+                }
                 files = data.files;
                 
                 document.getElementById('loadingState').style.display = 'none';
@@ -675,7 +586,10 @@
                 }
             } catch (error) {
                 console.error('Error loading files:', error);
-                document.getElementById('loadingState').innerHTML = '<p style="color: #c92a2a;">Error loading files. Make sure the server is running.</p>';
+                const loadingState = document.getElementById('loadingState');
+                loadingState.style.display = 'block';
+                loadingState.innerHTML = '<p style="color: #c92a2a;"></p>';
+                loadingState.querySelector('p').textContent = `Error loading files: ${error.message}`;
             }
         }
 
@@ -691,33 +605,33 @@
                 row.innerHTML = `
                     <td>
                         ${isImage 
-                            ? `<img src="uploads/${file.filename}" class="thumbnail" alt="${file.filename}">`
+                            ? `<img src="${escapeAttr(uploadUrl(file.filename))}" class="thumbnail" alt="${escapeAttr(file.filename)}">`
                             : `<svg class="file-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
                                </svg>`
                         }
                     </td>
-                    <td class="file-name">${file.filename}</td>
+                    <td class="file-name">${escapeHtml(file.filename)}</td>
                     <td><span class="file-type ${fileType}">${fileType}</span></td>
                     <td>${formatFileSize(file.size)}</td>
                     <td>${formatDate(file.uploadDate)}</td>
                     <td>
                         <div class="actions">
-                            <button class="action-btn btn-preview" onclick="previewFile('${file.filename}')">
+                            <button class="action-btn btn-preview" data-action="preview">
                                 <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                                 </svg>
                                 Preview
                             </button>
-                            <button class="action-btn btn-download" onclick="downloadFile('${file.filename}')">
+                            <button class="action-btn btn-download" data-action="download">
                                 <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                                 </svg>
                                 Download
                             </button>
                             ${currentUser.role === 'admin' ? `
-                            <button class="action-btn btn-delete" onclick="deleteFile('${file.filename}')">
+                            <button class="action-btn btn-delete" data-action="delete">
                                 <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                 </svg>
@@ -727,6 +641,16 @@
                         </div>
                     </td>
                 `;
+
+                const handlers = {
+                    preview: previewFile,
+                    download: downloadFile,
+                    delete: deleteFile
+                };
+                row.querySelectorAll('[data-action]').forEach(button => {
+                    button.addEventListener('click', () => handlers[button.dataset.action](file.filename));
+                });
+
                 tbody.appendChild(row);
             });
         }
@@ -766,8 +690,12 @@
             return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
         }
 
+        function uploadUrl(filename) {
+            return `uploads/${encodeURIComponent(filename)}?token=${encodeURIComponent(token)}`;
+        }
+
         function downloadFile(filename) {
-            window.location.href = `download/${filename}`;
+            window.location.href = `download/${encodeURIComponent(filename)}?token=${encodeURIComponent(token)}`;
         }
 
         async function previewFile(filename) {
@@ -780,13 +708,13 @@
             modal.classList.add('active');
 
             const fileType = getFileType(filename);
-            const ext = filename.split('.').pop().toLowerCase();
+            const ext = getFileExtension(filename);
             const fileUrl = `uploads/${filename}`;
 
             try {
                 if (fileType === 'image') {
                     // Preview images
-                    modalBody.innerHTML = `<img src="${fileUrl}" class="preview-image" alt="${filename}">`;
+                    modalBody.innerHTML = `<img src="${fileUrl}" class="preview-image" alt="${escapeAttr(filename)}">`;
                 } else if (fileType === 'video') {
                     // Preview videos
                     modalBody.innerHTML = `
@@ -808,7 +736,7 @@
                     modalBody.innerHTML = `<iframe src="${fileUrl}" class="preview-pdf"></iframe>`;
                 } else if (['txt', 'js', 'json', 'html', 'css', 'xml', 'md', 'csv', 'log', 'py', 'java', 'c', 'cpp', 'sh', 'ps1'].includes(ext)) {
                     // Preview text files
-                    const response = await fetch(fileUrl);
+                    const response = await fetch(uploadUrl(filename));
                     const text = await response.text();
                     modalBody.innerHTML = `<pre class="preview-text">${escapeHtml(text)}</pre>`;
                 } else {
@@ -820,7 +748,7 @@
                             </svg>
                             <h3>Preview not available</h3>
                             <p>This file type cannot be previewed in the browser.</p>
-                            <button class="btn btn-primary" onclick="downloadFile('${filename}')" style="margin-top: 16px;">
+                            <button class="btn btn-primary" id="previewDownloadBtn" style="margin-top: 16px;">
                                 <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                                 </svg>
@@ -828,6 +756,8 @@
                             </button>
                         </div>
                     `;
+                    document.getElementById('previewDownloadBtn')
+                        .addEventListener('click', () => downloadFile(filename));
                 }
             } catch (error) {
                 console.error('Error previewing file:', error);
@@ -837,9 +767,11 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                         <h3>Error loading preview</h3>
-                        <p>Failed to load file preview.</p>
+                        <p class="preview-error-message"></p>
                     </div>
                 `;
+                modalBody.querySelector('.preview-error-message').textContent =
+                    `Failed to load file preview: ${error.message}`;
             }
         }
 
@@ -852,6 +784,10 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function escapeAttr(text) {
+            return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
         // Close modal when clicking outside
@@ -875,7 +811,10 @@
             }
 
             try {
-                const response = await fetch(`delete/${filename}`, {
+                const response = await authFetch(`delete/${filename}`, {
+                    method: 'DELETE'
+                }, { handleAuthError: false });
+                const response = await fetch(`delete/${encodeURIComponent(filename)}`, {
                     method: 'DELETE',
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -887,27 +826,29 @@
                     return;
                 }
 
-                if (response.ok) {
-                    files = files.filter(f => f.filename !== filename);
-                    
-                    if (files.length === 0) {
-                        document.getElementById('fileTable').style.display = 'none';
-                        document.getElementById('emptyState').style.display = 'block';
-                    } else {
-                        displayFiles();
-                        updateStats();
-                    }
+                if (!response.ok) {
+                    throw new Error(await readErrorMessage(response, 'Failed to delete file'));
+                }
+
+                files = files.filter(f => f.filename !== filename);
+
+                if (files.length === 0) {
+                    document.getElementById('fileTable').style.display = 'none';
+                    document.getElementById('emptyState').style.display = 'block';
                 } else {
-                    alert('Failed to delete file');
+                    displayFiles();
+                    updateStats();
                 }
             } catch (error) {
                 console.error('Error deleting file:', error);
-                alert('Error deleting file');
+                alert(`Error deleting "${filename}": ${error.message}`);
             }
         }
 
-        // Load files when page loads
-        loadFiles();
+        // Load files when page loads (skipped while redirecting to the login page)
+        if (isAuthenticated) {
+            loadFiles();
+        }
     </script>
 </body>
 </html>

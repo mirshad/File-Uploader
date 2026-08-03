@@ -4,30 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - File Upload System</title>
+    <link rel="stylesheet" href="/assets/shared.css">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 20px;
         }
 
         .login-container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            padding: 40px;
             max-width: 400px;
-            width: 100%;
         }
 
         .logo {
@@ -43,15 +29,14 @@
         }
 
         h1 {
+            display: block;
             text-align: center;
-            color: #333;
             font-size: 28px;
             margin-bottom: 10px;
         }
 
         .subtitle {
             text-align: center;
-            color: #666;
             font-size: 14px;
             margin-bottom: 30px;
         }
@@ -159,7 +144,7 @@
     </style>
 </head>
 <body>
-    <div class="login-container">
+    <div class="login-container card">
         <div class="logo">
             <svg class="logo-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
@@ -218,9 +203,9 @@
                     body: JSON.stringify({ username, password })
                 });
 
-                const data = await response.json();
+                const data = await parseJsonResponse(response);
 
-                if (response.ok) {
+                if (response.ok && data.token) {
                     // Store token and user info
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
@@ -231,17 +216,31 @@
                         window.location.href = '/';
                     }, 1000);
                 } else {
-                    showAlert(data.error || 'Login failed. Please try again.', 'error');
+                    const fallback = response.ok
+                        ? 'Login failed: server response did not include a token.'
+                        : `Login failed (HTTP ${response.status}). Please try again.`;
+                    showAlert(data.error || fallback, 'error');
                     loginBtn.disabled = false;
                     loginBtn.textContent = 'Sign In';
                 }
             } catch (error) {
                 console.error('Login error:', error);
-                showAlert('Connection error. Please make sure the server is running.', 'error');
+                showAlert(`Connection error: ${error.message}. Please make sure the server is running.`, 'error');
                 loginBtn.disabled = false;
                 loginBtn.textContent = 'Sign In';
             }
         });
+
+        // Never let a non-JSON response (proxy error page, empty body) turn a real
+        // server error into a generic "connection error".
+        async function parseJsonResponse(response) {
+            try {
+                return await response.json();
+            } catch (error) {
+                console.error('Failed to parse server response as JSON:', error);
+                return {};
+            }
+        }
 
         function showAlert(message, type) {
             alertDiv.textContent = message;
