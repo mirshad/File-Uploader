@@ -173,6 +173,9 @@ app.post('/login', loginRateLimit, (req, res) => {
 });
 
 // Create uploads directory if it doesn't exist
+const uploadDir = process.env.UPLOAD_DIR || '/tmp/uploads';
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
 const uploadDir = path.resolve(process.env.UPLOAD_DIR || '/tmp/uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
@@ -380,6 +383,17 @@ process.on('unhandledRejection', (reason) => {
   console.error('Unhandled promise rejection:', reason);
 });
 
+if (require.main === module) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+   // console.log(`Local network access: http://${localIp}:${PORT}`);
+    console.log(`Open http://localhost:${PORT} in your browser to use the app`);
+    console.log(`Upload endpoint: http://localhost:${PORT}/upload`);
+    console.log(`Files will be saved to: ${path.resolve(uploadDir)}`);
+  });
+}
+
+module.exports = { app, authenticateToken, requireAdmin, getLocalIp, uploadDir, JWT_SECRET, users };
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server is running on http://localhost:${PORT}`);
  // console.log(`Local network access: http://${localIp}:${PORT}`);
