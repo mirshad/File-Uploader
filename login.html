@@ -203,9 +203,9 @@
                     body: JSON.stringify({ username, password })
                 });
 
-                const data = await response.json();
+                const data = await parseJsonResponse(response);
 
-                if (response.ok) {
+                if (response.ok && data.token) {
                     // Store token and user info
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
@@ -216,17 +216,31 @@
                         window.location.href = '/';
                     }, 1000);
                 } else {
-                    showAlert(data.error || 'Login failed. Please try again.', 'error');
+                    const fallback = response.ok
+                        ? 'Login failed: server response did not include a token.'
+                        : `Login failed (HTTP ${response.status}). Please try again.`;
+                    showAlert(data.error || fallback, 'error');
                     loginBtn.disabled = false;
                     loginBtn.textContent = 'Sign In';
                 }
             } catch (error) {
                 console.error('Login error:', error);
-                showAlert('Connection error. Please make sure the server is running.', 'error');
+                showAlert(`Connection error: ${error.message}. Please make sure the server is running.`, 'error');
                 loginBtn.disabled = false;
                 loginBtn.textContent = 'Sign In';
             }
         });
+
+        // Never let a non-JSON response (proxy error page, empty body) turn a real
+        // server error into a generic "connection error".
+        async function parseJsonResponse(response) {
+            try {
+                return await response.json();
+            } catch (error) {
+                console.error('Failed to parse server response as JSON:', error);
+                return {};
+            }
+        }
 
         function showAlert(message, type) {
             alertDiv.textContent = message;
