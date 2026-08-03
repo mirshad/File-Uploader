@@ -100,24 +100,22 @@ function requireAdmin(req, res, next) {
 
 function getLocalIp() {
   const interfaces = os.networkInterfaces();
-  let localIp = null;
- 
-  // Iterate over all network interfaces
-  
-    const addresses = interfaces["Wi-Fi"] || interfaces["Ethernet"];
- 
-    // Iterate over addresses for the current interface
+  const preferred = ['Wi-Fi', 'Ethernet'];
+  const names = [...preferred, ...Object.keys(interfaces).filter(n => !preferred.includes(n))];
+
+  for (const name of names) {
+    const addresses = interfaces[name];
+    if (!addresses) continue;
+
     for (const addr of addresses) {
       // Skip internal (loopback) and IPv6 addresses
       if (addr.family === 'IPv4' && !addr.internal) {
-        localIp = addr.address;
-        break; // Stop at the first valid IPv4 address
+        return addr.address;
       }
     }
- 
-  
- 
-  return localIp;
+  }
+
+  return null;
 }
 
 //const localIp = getLocalIp();
@@ -220,11 +218,12 @@ const upload = multer({
   }
 });
 
-// Upload endpoint
-app.post('/upload', authenticateToken, upload.single('file'), (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+// Translate multer failures (size limit, unexpected field, disk errors) into JSON
+// responses; they happen in middleware, outside the route handler's reach.
+function handleUpload(req, res, next) {
+  upload.single('file')(req, res, (err) => {
+    if (!err) {
+      return next();
     }
 
     console.log('File uploaded by:', req.user.username, '-', req.file.filename);
@@ -239,25 +238,39 @@ app.post('/upload', authenticateToken, upload.single('file'), (req, res) => {
     console.error('Upload error:', error);
     res.status(500).json({ error: 'Upload failed' });
   }
+
+  console.log('File uploaded by:', req.user.username, '-', req.file.filename);
+
+  res.json({
+    message: 'File uploaded successfully',
+    filename: req.file.filename,
+    originalName: req.file.originalname,
+    size: req.file.size,
+    path: req.file.path
+  });
 });
 
 // Get list of uploaded files
 app.get('/files', authenticateToken, (req, res) => {
   fs.readdir(uploadDir, (err, files) => {
     if (err) {
+      console.error('Failed to read upload directory:', err);
       return res.status(500).json({ error: 'Failed to read files' });
     }
-    
-    const fileList = files.map(filename => {
-      const filePath = path.join(uploadDir, filename);
-      const stats = fs.statSync(filePath);
-      return {
-        filename,
-        size: stats.size,
-        uploadDate: stats.mtime
-      };
-    });
-    
+
+    // A file can disappear between readdir and stat, so skip unreadable entries
+    // rather than throwing inside this callback, which would crash the process.
+    const fileList = [];
+    for (const filename of files) {
+      try {
+        const stats = fs.statSync(path.join(uploadDir, filename));
+        if (!stats.isFile()) continue;
+        fileList.push({ filename, size: stats.size, uploadDate: stats.mtime });
+      } catch (statError) {
+        console.error(`Skipping ${filename}, failed to stat:`, statError);
+      }
+    }
+
     res.json({ files: fileList });
   });
 });
@@ -296,11 +309,14 @@ app.delete('/delete/:filename', authenticateToken, requireAdmin, (req, res) => {
   if (!filePath || !fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'File not found' });
   }
-  
+
   fs.unlink(filePath, (err) => {
     if (err) {
       console.error('Error deleting file:', err);
-      return res.status(500).json({ error: 'Failed to delete file' });
+      const status = err.code === 'ENOENT' ? 404 : 500;
+      return res.status(status).json({
+        error: status === 404 ? 'File not found' : 'Failed to delete file'
+      });
     }
     
     console.log('File deleted by admin:', req.user.username, '-', path.basename(filePath));
@@ -326,6 +342,30 @@ app.get('/', (req, res) => {
 // Serve view.html for file management
 app.get('/view.html', (req, res) => {
   res.sendFile(path.join(__dirname, 'view.html'));
+});
+
+// Unknown routes answer with JSON so clients can always parse the response.
+app.use((req, res) => {
+  res.status(404).json({ error: `Not found: ${req.method} ${req.path}` });
+});
+
+// Central error handler: anything thrown or passed to next(err) lands here
+// instead of Express' default HTML error page.
+app.use((err, req, res, _next) => {
+  console.error(`Unhandled error on ${req.method} ${req.path}:`, err);
+
+  if (res.headersSent) {
+    return res.destroy(err);
+  }
+
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({
+    error: status < 500 ? err.message : 'Internal server error'
+  });
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection:', reason);
 });
 
 app.listen(PORT, '0.0.0.0', () => {

@@ -242,6 +242,12 @@
             color: #666;
         }
 
+        .file-error {
+            font-size: 13px;
+            color: #c92a2a;
+            margin-top: 4px;
+        }
+
         .file-status {
             display: flex;
             align-items: center;
@@ -387,8 +393,16 @@
                 window.location.href = '/login.html';
                 return false;
             }
-            
-            currentUser = JSON.parse(userStr);
+
+            try {
+                currentUser = JSON.parse(userStr);
+            } catch (error) {
+                // Corrupted session data: clear it instead of leaving a broken page.
+                console.error('Stored user data is not valid JSON, logging out:', error);
+                logout();
+                return false;
+            }
+
             document.getElementById('username').textContent = currentUser.username;
             document.getElementById('userRole').textContent = currentUser.role;
             return true;
@@ -520,16 +534,25 @@
 
                 if (response.ok) {
                     updateFileStatus(fileObj.id, 'success');
-                } else {
-                    throw new Error('Upload failed');
+                    return;
                 }
+
+                let serverError = '';
+                try {
+                    const data = await response.json();
+                    serverError = data.error || '';
+                } catch (parseError) {
+                    console.error('Failed to parse upload error response:', parseError);
+                }
+
+                throw new Error(serverError || `Upload failed (HTTP ${response.status})`);
             } catch (error) {
                 console.error('Upload error:', error);
-                updateFileStatus(fileObj.id, 'error');
+                updateFileStatus(fileObj.id, 'error', error.message);
             }
         }
 
-        function updateFileStatus(fileId, status) {
+        function updateFileStatus(fileId, status, message) {
             const fileItem = document.getElementById(`file-${fileId}`);
             if (!fileItem) return;
 
@@ -546,10 +569,25 @@
                 statusIcon.innerHTML = `
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 `;
+                showFileError(fileItem, message || 'Upload failed');
             }
 
             const file = uploadedFiles.find(f => f.id === fileId);
             if (file) file.status = status;
+        }
+
+        function showFileError(fileItem, message) {
+            const details = fileItem.querySelector('.file-details');
+            if (!details) return;
+
+            let errorEl = details.querySelector('.file-error');
+            if (!errorEl) {
+                errorEl = document.createElement('div');
+                errorEl.className = 'file-error';
+                details.appendChild(errorEl);
+            }
+            errorEl.textContent = message;
+            fileItem.title = message;
         }
 
         function removeFile(fileId) {
