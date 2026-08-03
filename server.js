@@ -218,6 +218,24 @@ const upload = multer({
   }
 });
 
+// Resolve an uploaded file, responding with 404 when it does not exist.
+function resolveUploadedFile(req, res) {
+  const filename = req.params.filename;
+  const filePath = path.join(uploadDir, filename);
+
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ error: 'File not found' });
+    return null;
+  }
+
+  return { filename, filePath };
+}
+
+// Upload endpoint
+app.post('/upload', authenticateToken, upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
 // Translate multer failures (size limit, unexpected field, disk errors) into JSON
 // responses; they happen in middleware, outside the route handler's reach.
 function handleUpload(req, res, next) {
@@ -292,23 +310,19 @@ app.use('/uploads', authenticateToken, express.static(uploadDir, {
 }));
 
 // Download file endpoint
-app.get('/download/:filename', authenticateToken, (req, res) => {
-  const filePath = resolveUploadPath(req.params.filename);
+app.get('/download/:filename', (req, res) => {
+  const file = resolveUploadedFile(req, res);
+  if (!file) return;
 
-  if (!filePath || !fs.existsSync(filePath)) {
-    return res.status(404).json({ error: 'File not found' });
-  }
-  
-  res.download(filePath, path.basename(filePath));
+  res.download(file.filePath, file.filename);
 });
 
 // Delete file endpoint (Admin only)
 app.delete('/delete/:filename', authenticateToken, requireAdmin, (req, res) => {
-  const filePath = resolveUploadPath(req.params.filename);
+  const file = resolveUploadedFile(req, res);
+  if (!file) return;
 
-  if (!filePath || !fs.existsSync(filePath)) {
-    return res.status(404).json({ error: 'File not found' });
-  }
+  const { filename, filePath } = file;
 
   fs.unlink(filePath, (err) => {
     if (err) {
@@ -329,20 +343,18 @@ app.get('/health', (req, res) => {
   res.json({ status: 'Server is running' });
 });
 
-// Serve login page
-app.get('/login.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'login.html'));
-});
+// Serve the HTML pages
+const pages = {
+  '/': 'index.html',
+  '/login.html': 'login.html',
+  '/view.html': 'view.html'
+};
 
-// Serve index.html for root route
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// Serve view.html for file management
-app.get('/view.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'view.html'));
-});
+for (const [route, page] of Object.entries(pages)) {
+  app.get(route, (req, res) => {
+    res.sendFile(path.join(__dirname, page));
+  });
+}
 
 // Unknown routes answer with JSON so clients can always parse the response.
 app.use((req, res) => {
