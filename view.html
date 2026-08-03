@@ -718,33 +718,33 @@
                 row.innerHTML = `
                     <td>
                         ${isImage 
-                            ? `<img src="uploads/${file.filename}" class="thumbnail" alt="${file.filename}">`
+                            ? `<img src="${escapeAttr(uploadUrl(file.filename))}" class="thumbnail" alt="${escapeAttr(file.filename)}">`
                             : `<svg class="file-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
                                </svg>`
                         }
                     </td>
-                    <td class="file-name">${file.filename}</td>
+                    <td class="file-name">${escapeHtml(file.filename)}</td>
                     <td><span class="file-type ${fileType}">${fileType}</span></td>
                     <td>${formatFileSize(file.size)}</td>
                     <td>${formatDate(file.uploadDate)}</td>
                     <td>
                         <div class="actions">
-                            <button class="action-btn btn-preview" onclick="previewFile('${file.filename}')">
+                            <button class="action-btn btn-preview" data-action="preview">
                                 <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                                 </svg>
                                 Preview
                             </button>
-                            <button class="action-btn btn-download" onclick="downloadFile('${file.filename}')">
+                            <button class="action-btn btn-download" data-action="download">
                                 <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                                 </svg>
                                 Download
                             </button>
                             ${currentUser.role === 'admin' ? `
-                            <button class="action-btn btn-delete" onclick="deleteFile('${file.filename}')">
+                            <button class="action-btn btn-delete" data-action="delete">
                                 <svg class="action-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                 </svg>
@@ -754,6 +754,16 @@
                         </div>
                     </td>
                 `;
+
+                const handlers = {
+                    preview: previewFile,
+                    download: downloadFile,
+                    delete: deleteFile
+                };
+                row.querySelectorAll('[data-action]').forEach(button => {
+                    button.addEventListener('click', () => handlers[button.dataset.action](file.filename));
+                });
+
                 tbody.appendChild(row);
             });
         }
@@ -793,8 +803,12 @@
             return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
         }
 
+        function uploadUrl(filename) {
+            return `uploads/${encodeURIComponent(filename)}?token=${encodeURIComponent(token)}`;
+        }
+
         function downloadFile(filename) {
-            window.location.href = `download/${filename}`;
+            window.location.href = `download/${encodeURIComponent(filename)}?token=${encodeURIComponent(token)}`;
         }
 
         async function previewFile(filename) {
@@ -808,12 +822,12 @@
 
             const fileType = getFileType(filename);
             const ext = filename.split('.').pop().toLowerCase();
-            const fileUrl = `uploads/${filename}`;
+            const fileUrl = escapeAttr(uploadUrl(filename));
 
             try {
                 if (fileType === 'image') {
                     // Preview images
-                    modalBody.innerHTML = `<img src="${fileUrl}" class="preview-image" alt="${filename}">`;
+                    modalBody.innerHTML = `<img src="${fileUrl}" class="preview-image" alt="${escapeAttr(filename)}">`;
                 } else if (fileType === 'video') {
                     // Preview videos
                     modalBody.innerHTML = `
@@ -835,10 +849,7 @@
                     modalBody.innerHTML = `<iframe src="${fileUrl}" class="preview-pdf"></iframe>`;
                 } else if (['txt', 'js', 'json', 'html', 'css', 'xml', 'md', 'csv', 'log', 'py', 'java', 'c', 'cpp', 'sh', 'ps1'].includes(ext)) {
                     // Preview text files
-                    const response = await fetch(fileUrl);
-                    if (!response.ok) {
-                        throw new Error(await readErrorMessage(response, 'Failed to load file'));
-                    }
+                    const response = await fetch(uploadUrl(filename));
                     const text = await response.text();
                     modalBody.innerHTML = `<pre class="preview-text">${escapeHtml(text)}</pre>`;
                 } else {
@@ -850,7 +861,7 @@
                             </svg>
                             <h3>Preview not available</h3>
                             <p>This file type cannot be previewed in the browser.</p>
-                            <button class="btn btn-primary" onclick="downloadFile('${filename}')" style="margin-top: 16px;">
+                            <button class="btn btn-primary" id="previewDownloadBtn" style="margin-top: 16px;">
                                 <svg class="btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
                                 </svg>
@@ -858,6 +869,8 @@
                             </button>
                         </div>
                     `;
+                    document.getElementById('previewDownloadBtn')
+                        .addEventListener('click', () => downloadFile(filename));
                 }
             } catch (error) {
                 console.error('Error previewing file:', error);
@@ -886,6 +899,10 @@
             return div.innerHTML;
         }
 
+        function escapeAttr(text) {
+            return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
         // Close modal when clicking outside
         window.onclick = function(event) {
             const modal = document.getElementById('previewModal');
@@ -907,7 +924,7 @@
             }
 
             try {
-                const response = await fetch(`delete/${filename}`, {
+                const response = await fetch(`delete/${encodeURIComponent(filename)}`, {
                     method: 'DELETE',
                     headers: {
                         'Authorization': `Bearer ${token}`
